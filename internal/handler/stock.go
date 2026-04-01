@@ -83,3 +83,45 @@ func (h *Handler) RemoveStock(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+// CreateAlert sets a price alert on a watched symbol.
+func (h *Handler) CreateAlert(c *gin.Context) {
+	var req model.CreateAlertRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body: expect {\"symbol\":\"AAPL\",\"target_price\":200,\"direction\":\"above\"}"})
+		return
+	}
+	alert, err := h.store.AddAlert(req.Symbol, req.Target, req.Direction)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "symbol not in watchlist — add it first"})
+			return
+		}
+		slog.Error("create alert", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	slog.Info("alert created", "alert_id", alert.ID, "symbol", alert.Symbol, "target", alert.Target, "direction", alert.Direction)
+	c.JSON(http.StatusCreated, alert)
+}
+
+// ListAlerts returns all alerts with current triggered status.
+func (h *Handler) ListAlerts(c *gin.Context) {
+	alerts := h.store.ListAlerts()
+	c.JSON(http.StatusOK, alerts)
+}
+
+// DeleteAlert removes an alert by ID.
+func (h *Handler) DeleteAlert(c *gin.Context) {
+	id := c.Param("id")
+	if err := h.store.DeleteAlert(id); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "alert not found"})
+			return
+		}
+		slog.Error("delete alert", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.Status(http.StatusNoContent)
+}

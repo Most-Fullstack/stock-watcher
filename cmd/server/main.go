@@ -37,6 +37,10 @@ func main() {
 	r.POST("/api/stocks", h.AddStock)
 	r.DELETE("/api/stocks/:symbol", h.RemoveStock)
 
+	r.POST("/api/alerts", h.CreateAlert)
+	r.GET("/api/alerts", h.ListAlerts)
+	r.DELETE("/api/alerts/:id", h.DeleteAlert)
+
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           r,

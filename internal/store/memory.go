@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -19,11 +20,13 @@ var basePrices = map[string]float64{
 	"MSFT":  420,
 }
 
-// Memory holds the watchlist and generates mock prices.
+// Memory holds the watchlist, alerts, and generates mock prices.
 type Memory struct {
 	mu      sync.RWMutex
 	rndMu   sync.Mutex
 	symbols map[string]struct{}
+	alerts  []model.Alert
+	alertID int
 	rnd     *rand.Rand
 }
 
@@ -31,6 +34,7 @@ type Memory struct {
 func NewMemory() *Memory {
 	return &Memory{
 		symbols: make(map[string]struct{}),
+		alerts:  make([]model.Alert, 0),
 		rnd:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
@@ -97,4 +101,57 @@ func (m *Memory) mockPriceLocked(symbol string) float64 {
 
 func round2(x float64) float64 {
 	return float64(int64(x*100+0.5)) / 100
+}
+
+// AddAlert creates a price alert for a watched symbol.
+func (m *Memory) AddAlert(symbol string, target float64, direction string) (model.Alert, error) {
+	sym := model.NormalizeSymbol(symbol)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.symbols[sym]; !ok {
+		return model.Alert{}, ErrNotFound
+	}
+	m.alertID++
+	alert := model.Alert{
+		ID:        fmt.Sprintf("alert-%d", m.alertID),
+		Symbol:    sym,
+		Target:    target,
+		Direction: direction,
+		CreatedAt: time.Now(),
+	}
+	m.alerts = append(m.alerts, alert)
+	return alert, nil
+}
+
+// ListAlerts returns all alerts with triggered status evaluated against current prices.
+func (m *Memory) ListAlerts() []model.Alert {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]model.Alert, len(m.alerts))
+	copy(out, m.alerts)
+	for i := range out {
+		price := m.mockPriceLocked(out[i].Symbol)
+		out[i].Triggered = isTriggered(price, out[i].Target, out[i].Direction)
+	}
+	return out
+}
+
+// DeleteAlert removes an alert by ID.
+func (m *Memory) DeleteAlert(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i, a := range m.alerts {
+		if a.ID == id {
+			m.alerts = append(m.alerts[:i], m.alerts[i+1:]...)
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+func isTriggered(price, target float64, direction string) bool {
+	if direction == "above" {
+		return price >= target
+	}
+	return price <= target
 }
