@@ -33,6 +33,26 @@ type CreateAlertRequest struct {
 	Direction string  `json:"direction" binding:"required,oneof=above below"`
 }
 
+// Holding represents a position: shares owned for a symbol.
+type Holding struct {
+	Symbol   string  `json:"symbol"`
+	Quantity float64 `json:"quantity"`
+	Price    float64 `json:"price"`
+	Value    float64 `json:"value"`
+}
+
+// Portfolio is the aggregate view of all holdings.
+type Portfolio struct {
+	Holdings   []Holding `json:"holdings"`
+	TotalValue float64   `json:"total_value"`
+	StockCount int       `json:"stock_count"`
+}
+
+// SetHoldingRequest is the JSON body for PUT /api/portfolio/:symbol.
+type SetHoldingRequest struct {
+	Quantity float64 `json:"quantity" binding:"required,gte=0"`
+}
+
 // NormalizeSymbol uppercases and trims a ticker symbol.
 func NormalizeSymbol(s string) string {
 	return strings.ToUpper(strings.TrimSpace(s))

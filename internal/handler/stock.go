@@ -125,3 +125,30 @@ func (h *Handler) DeleteAlert(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
+
+// SetHolding sets the share quantity for a watched symbol.
+func (h *Handler) SetHolding(c *gin.Context) {
+	symbol := c.Param("symbol")
+	var req model.SetHoldingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid body: expect {\"quantity\":10}"})
+		return
+	}
+	if err := h.store.SetHolding(symbol, req.Quantity); err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "symbol not in watchlist — add it first"})
+			return
+		}
+		slog.Error("set holding", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	slog.Info("holding updated", "symbol", model.NormalizeSymbol(symbol), "quantity", req.Quantity)
+	c.JSON(http.StatusOK, gin.H{"symbol": model.NormalizeSymbol(symbol), "quantity": req.Quantity})
+}
+
+// GetPortfolio returns the portfolio summary with all holdings and total value.
+func (h *Handler) GetPortfolio(c *gin.Context) {
+	portfolio := h.store.GetPortfolio()
+	c.JSON(http.StatusOK, portfolio)
+}

@@ -20,22 +20,24 @@ var basePrices = map[string]float64{
 	"MSFT":  420,
 }
 
-// Memory holds the watchlist, alerts, and generates mock prices.
+// Memory holds the watchlist, alerts, holdings, and generates mock prices.
 type Memory struct {
-	mu      sync.RWMutex
-	rndMu   sync.Mutex
-	symbols map[string]struct{}
-	alerts  []model.Alert
-	alertID int
-	rnd     *rand.Rand
+	mu       sync.RWMutex
+	rndMu    sync.Mutex
+	symbols  map[string]struct{}
+	holdings map[string]float64
+	alerts   []model.Alert
+	alertID  int
+	rnd      *rand.Rand
 }
 
 // NewMemory returns an empty in-memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		symbols: make(map[string]struct{}),
-		alerts:  make([]model.Alert, 0),
-		rnd:     rand.New(rand.NewSource(time.Now().UnixNano())),
+		symbols:  make(map[string]struct{}),
+		holdings: make(map[string]float64),
+		alerts:   make([]model.Alert, 0),
+		rnd:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
@@ -154,4 +156,47 @@ func isTriggered(price, target float64, direction string) bool {
 		return price >= target
 	}
 	return price <= target
+}
+
+// SetHolding sets the share quantity for a watched symbol. Quantity 0 removes the holding.
+func (m *Memory) SetHolding(symbol string, quantity float64) error {
+	sym := model.NormalizeSymbol(symbol)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.symbols[sym]; !ok {
+		return ErrNotFound
+	}
+	if quantity <= 0 {
+		delete(m.holdings, sym)
+	} else {
+		m.holdings[sym] = quantity
+	}
+	return nil
+}
+
+// GetPortfolio returns all holdings with current prices and total value.
+func (m *Memory) GetPortfolio() model.Portfolio {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	holdings := make([]model.Holding, 0, len(m.holdings))
+	var total float64
+	for sym, qty := range m.holdings {
+		if _, watched := m.symbols[sym]; !watched {
+			continue
+		}
+		price := m.mockPriceLocked(sym)
+		value := round2(price * qty)
+		total += value
+		holdings = append(holdings, model.Holding{
+			Symbol:   sym,
+			Quantity: qty,
+			Price:    price,
+			Value:    value,
+		})
+	}
+	return model.Portfolio{
+		Holdings:   holdings,
+		TotalValue: round2(total),
+		StockCount: len(holdings),
+	}
 }

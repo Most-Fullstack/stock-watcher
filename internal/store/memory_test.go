@@ -83,3 +83,44 @@ func TestAlertLifecycle(t *testing.T) {
 		t.Fatalf("DeleteAlert(nonexistent) error = %v, want ErrNotFound", err)
 	}
 }
+
+func TestPortfolioLifecycle(t *testing.T) {
+	m := NewMemory()
+	m.Add("AAPL")
+	m.Add("MSFT")
+
+	tests := []struct {
+		name    string
+		symbol  string
+		qty     float64
+		wantErr error
+	}{
+		{name: "set holding for watched stock", symbol: "AAPL", qty: 10, wantErr: nil},
+		{name: "set holding for another stock", symbol: "MSFT", qty: 5, wantErr: nil},
+		{name: "set holding for unwatched stock", symbol: "NVDA", qty: 3, wantErr: ErrNotFound},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := m.SetHolding(tc.symbol, tc.qty)
+			if err != tc.wantErr {
+				t.Fatalf("SetHolding() error = %v, want %v", err, tc.wantErr)
+			}
+		})
+	}
+
+	p := m.GetPortfolio()
+	if p.StockCount != 2 {
+		t.Fatalf("portfolio stock count = %d, want 2", p.StockCount)
+	}
+	if p.TotalValue <= 0 {
+		t.Fatalf("portfolio total value = %f, want > 0", p.TotalValue)
+	}
+
+	if err := m.SetHolding("AAPL", 0); err != nil {
+		t.Fatalf("SetHolding(0) error = %v", err)
+	}
+	p2 := m.GetPortfolio()
+	if p2.StockCount != 1 {
+		t.Fatalf("portfolio after remove: stock count = %d, want 1", p2.StockCount)
+	}
+}
