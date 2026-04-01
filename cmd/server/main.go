@@ -41,6 +41,9 @@ func main() {
 	r.GET("/api/alerts", h.ListAlerts)
 	r.DELETE("/api/alerts/:id", h.DeleteAlert)
 
+	r.PUT("/api/portfolio/:symbol", h.SetHolding)
+	r.GET("/api/portfolio", h.GetPortfolio)
+
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           r,
