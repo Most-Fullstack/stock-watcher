@@ -15,6 +15,8 @@ POST /api/alerts creates a price alert on a watched symbol. The request body req
 
 PUT /api/portfolio/:symbol sets the share quantity for a watched symbol. The request body requires quantity (number, zero or positive). Setting quantity to zero removes the holding. Returns 404 if the symbol is not in the watchlist. GET /api/portfolio returns the portfolio summary including all holdings with current prices and per-position value, plus aggregate total_value and stock_count.
 
+GET /api/market/summary returns an aggregate snapshot of the entire watchlist in a single request. The response includes total_symbols (count of watched tickers), average_price (mean of all current mock prices), highest_stock and lowest_stock (the symbols with the highest and lowest current prices), alert_count (total alerts), triggered_count (alerts currently triggered), and portfolio_value (sum of all holdings at current prices). This endpoint is useful for dashboard views that need a quick overview without fetching individual resources.
+
 ## Data Models
 Stock represents a watched symbol with two fields: Symbol (uppercase ticker string) and Price (floating-point mock quote). Prices are generated on each read using per-symbol base values with a random plus-or-minus two percent band, producing plausible market-like variation.
 
@@ -23,6 +25,8 @@ Alert represents a user-defined price threshold. Fields include ID (auto-generat
 Holding represents a stock position in the portfolio. Fields include Symbol (the ticker), Quantity (number of shares), Price (current mock price at query time), and Value (quantity multiplied by price, rounded to two decimal places).
 
 Portfolio is the aggregate view returned by GET /api/portfolio. It contains Holdings (array of Holding objects), TotalValue (sum of all position values), and StockCount (number of active holdings).
+
+MarketSummary is the aggregate snapshot returned by GET /api/market/summary. Fields include TotalSymbols (number of watched tickers), AveragePrice (mean price across all symbols), HighestStock and LowestStock (Stock objects for the current price extremes, omitted when the watchlist is empty), AlertCount (total number of alerts), TriggeredCount (alerts currently in triggered state), and PortfolioValue (total value of all holdings at current prices).
 
 ## Business Logic
 stock-watcher fabricates prices in application code instead of calling external brokers. Known symbols (AAPL, GOOGL, TSLA, AMZN, MSFT) have fixed base prices; unknown symbols get a random base between 100 and 499. Each read applies a random factor between 0.98 and 1.02 to simulate price movement.

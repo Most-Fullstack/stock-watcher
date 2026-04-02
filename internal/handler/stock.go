@@ -152,3 +152,9 @@ func (h *Handler) GetPortfolio(c *gin.Context) {
 	portfolio := h.store.GetPortfolio()
 	c.JSON(http.StatusOK, portfolio)
 }
+
+// GetMarketSummary returns an aggregate snapshot of the entire watchlist.
+func (h *Handler) GetMarketSummary(c *gin.Context) {
+	summary := h.store.GetMarketSummary()
+	c.JSON(http.StatusOK, summary)
+}

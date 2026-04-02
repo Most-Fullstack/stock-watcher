@@ -174,6 +174,58 @@ func (m *Memory) SetHolding(symbol string, quantity float64) error {
 	return nil
 }
 
+// GetMarketSummary returns an aggregate snapshot of the watchlist.
+func (m *Memory) GetMarketSummary() model.MarketSummary {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	summary := model.MarketSummary{
+		TotalSymbols: len(m.symbols),
+		AlertCount:   len(m.alerts),
+	}
+
+	if summary.TotalSymbols == 0 {
+		return summary
+	}
+
+	var total float64
+	var highest, lowest *model.Stock
+
+	for sym := range m.symbols {
+		price := m.mockPriceLocked(sym)
+		total += price
+		s := &model.Stock{Symbol: sym, Price: price}
+		if highest == nil || price > highest.Price {
+			highest = s
+		}
+		if lowest == nil || price < lowest.Price {
+			lowest = s
+		}
+	}
+
+	summary.AveragePrice = round2(total / float64(summary.TotalSymbols))
+	summary.HighestStock = highest
+	summary.LowestStock = lowest
+
+	for _, a := range m.alerts {
+		price := m.mockPriceLocked(a.Symbol)
+		if isTriggered(price, a.Target, a.Direction) {
+			summary.TriggeredCount++
+		}
+	}
+
+	var portfolioTotal float64
+	for sym, qty := range m.holdings {
+		if _, watched := m.symbols[sym]; !watched {
+			continue
+		}
+		portfolioTotal += m.mockPriceLocked(sym) * qty
+	}
+	summary.PortfolioValue = round2(portfolioTotal)
+
+	return summary
+}
+
 // GetPortfolio returns all holdings with current prices and total value.
 func (m *Memory) GetPortfolio() model.Portfolio {
 	m.mu.RLock()

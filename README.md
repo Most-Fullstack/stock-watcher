@@ -18,6 +18,12 @@ go run ./cmd/server
 | GET | `/api/stocks/:symbol` | One symbol |
 | POST | `/api/stocks` | Body: `{"symbol":"AAPL"}` |
 | DELETE | `/api/stocks/:symbol` | Remove from watchlist |
+| POST | `/api/alerts` | Body: `{"symbol":"AAPL","target_price":200,"direction":"above"}` |
+| GET | `/api/alerts` | List all alerts with triggered status |
+| DELETE | `/api/alerts/:id` | Remove an alert |
+| PUT | `/api/portfolio/:symbol` | Body: `{"quantity":10}` |
+| GET | `/api/portfolio` | Portfolio summary with total value |
+| GET | `/api/market/summary` | Aggregate watchlist snapshot |
 
 ## Docker
 
