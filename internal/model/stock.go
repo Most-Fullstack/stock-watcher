@@ -53,6 +53,17 @@ type SetHoldingRequest struct {
 	Quantity float64 `json:"quantity" binding:"required,gte=0"`
 }
 
+// MarketSummary is an aggregate snapshot of the entire watchlist.
+type MarketSummary struct {
+	TotalSymbols   int     `json:"total_symbols"`
+	AveragePrice   float64 `json:"average_price"`
+	HighestStock   *Stock  `json:"highest_stock,omitempty"`
+	LowestStock    *Stock  `json:"lowest_stock,omitempty"`
+	AlertCount     int     `json:"alert_count"`
+	TriggeredCount int     `json:"triggered_count"`
+	PortfolioValue float64 `json:"portfolio_value"`
+}
+
 // NormalizeSymbol uppercases and trims a ticker symbol.
 func NormalizeSymbol(s string) string {
 	return strings.ToUpper(strings.TrimSpace(s))

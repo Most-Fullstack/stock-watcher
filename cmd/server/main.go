@@ -44,6 +44,8 @@ func main() {
 	r.PUT("/api/portfolio/:symbol", h.SetHolding)
 	r.GET("/api/portfolio", h.GetPortfolio)
 
+	r.GET("/api/market/summary", h.GetMarketSummary)
+
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           r,
