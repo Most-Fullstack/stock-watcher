@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/Most-Fullstack/stock-watcher/internal/model"
 	"github.com/Most-Fullstack/stock-watcher/internal/store"
@@ -157,4 +158,46 @@ func (h *Handler) GetPortfolio(c *gin.Context) {
 func (h *Handler) GetMarketSummary(c *gin.Context) {
 	summary := h.store.GetMarketSummary()
 	c.JSON(http.StatusOK, summary)
+}
+
+// RecordPrice explicitly records a price snapshot for a watched symbol.
+func (h *Handler) RecordPrice(c *gin.Context) {
+	symbol := c.Param("symbol")
+	pt, err := h.store.RecordPrice(symbol)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "symbol not in watchlist — add it first"})
+			return
+		}
+		slog.Error("record price", "error", err, "symbol", model.NormalizeSymbol(symbol))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	slog.Info("price recorded", "symbol", model.NormalizeSymbol(symbol), "price", pt.Price)
+	c.JSON(http.StatusCreated, pt)
+}
+
+// GetPriceHistory returns historical prices and statistics for a symbol.
+func (h *Handler) GetPriceHistory(c *gin.Context) {
+	symbol := c.Param("symbol")
+	limit := 0
+	if q := c.Query("limit"); q != "" {
+		parsed, err := strconv.Atoi(q)
+		if err != nil || parsed < 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a non-negative integer"})
+			return
+		}
+		limit = parsed
+	}
+	history, err := h.store.GetPriceHistory(symbol, limit)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "symbol not in watchlist"})
+			return
+		}
+		slog.Error("get price history", "error", err, "symbol", model.NormalizeSymbol(symbol))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, history)
 }
