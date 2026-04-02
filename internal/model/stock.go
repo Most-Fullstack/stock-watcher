@@ -64,6 +64,24 @@ type MarketSummary struct {
 	PortfolioValue float64 `json:"portfolio_value"`
 }
 
+// PricePoint is a single timestamped price observation.
+type PricePoint struct {
+	Price     float64   `json:"price"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// PriceHistory contains historical prices and computed statistics for a symbol.
+type PriceHistory struct {
+	Symbol     string       `json:"symbol"`
+	Points     []PricePoint `json:"points"`
+	High       float64      `json:"high"`
+	Low        float64      `json:"low"`
+	AvgPrice   float64      `json:"avg_price"`
+	Change     float64      `json:"change"`
+	ChangePct  float64      `json:"change_pct"`
+	PointCount int          `json:"point_count"`
+}
+
 // NormalizeSymbol uppercases and trims a ticker symbol.
 func NormalizeSymbol(s string) string {
 	return strings.ToUpper(strings.TrimSpace(s))

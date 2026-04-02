@@ -24,6 +24,8 @@ go run ./cmd/server
 | PUT | `/api/portfolio/:symbol` | Body: `{"quantity":10}` |
 | GET | `/api/portfolio` | Portfolio summary with total value |
 | GET | `/api/market/summary` | Aggregate watchlist snapshot |
+| POST | `/api/stocks/:symbol/prices` | Record a price snapshot |
+| GET | `/api/stocks/:symbol/prices` | Price history with stats (`?limit=N`) |
 
 ## Docker
 

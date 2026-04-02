@@ -20,7 +20,9 @@ var basePrices = map[string]float64{
 	"MSFT":  420,
 }
 
-// Memory holds the watchlist, alerts, holdings, and generates mock prices.
+const maxHistoryPerSymbol = 100
+
+// Memory holds the watchlist, alerts, holdings, price history, and generates mock prices.
 type Memory struct {
 	mu       sync.RWMutex
 	rndMu    sync.Mutex
@@ -29,6 +31,7 @@ type Memory struct {
 	alerts   []model.Alert
 	alertID  int
 	rnd      *rand.Rand
+	history  map[string][]model.PricePoint
 }
 
 // NewMemory returns an empty in-memory store.
@@ -38,6 +41,7 @@ func NewMemory() *Memory {
 		holdings: make(map[string]float64),
 		alerts:   make([]model.Alert, 0),
 		rnd:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		history:  make(map[string][]model.PricePoint),
 	}
 }
 
@@ -64,26 +68,30 @@ func (m *Memory) Remove(symbol string) error {
 	return nil
 }
 
-// List returns all watched symbols with current mock prices.
+// List returns all watched symbols with current mock prices and records each price.
 func (m *Memory) List() []model.Stock {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	out := make([]model.Stock, 0, len(m.symbols))
 	for sym := range m.symbols {
-		out = append(out, model.Stock{Symbol: sym, Price: m.mockPriceLocked(sym)})
+		price := m.mockPriceLocked(sym)
+		m.appendHistory(sym, price)
+		out = append(out, model.Stock{Symbol: sym, Price: price})
 	}
 	return out
 }
 
-// Get returns one watched stock or ErrNotFound.
+// Get returns one watched stock or ErrNotFound and records the price.
 func (m *Memory) Get(symbol string) (model.Stock, error) {
 	sym := model.NormalizeSymbol(symbol)
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if _, ok := m.symbols[sym]; !ok {
 		return model.Stock{}, ErrNotFound
 	}
-	return model.Stock{Symbol: sym, Price: m.mockPriceLocked(sym)}, nil
+	price := m.mockPriceLocked(sym)
+	m.appendHistory(sym, price)
+	return model.Stock{Symbol: sym, Price: price}, nil
 }
 
 // mockPriceLocked requires RLock or Lock held on mu.
@@ -251,4 +259,83 @@ func (m *Memory) GetPortfolio() model.Portfolio {
 		TotalValue: round2(total),
 		StockCount: len(holdings),
 	}
+}
+
+// appendHistory adds a price point capped at maxHistoryPerSymbol. Caller must hold mu.
+func (m *Memory) appendHistory(symbol string, price float64) {
+	pts := m.history[symbol]
+	pts = append(pts, model.PricePoint{Price: price, Timestamp: time.Now()})
+	if len(pts) > maxHistoryPerSymbol {
+		pts = pts[len(pts)-maxHistoryPerSymbol:]
+	}
+	m.history[symbol] = pts
+}
+
+// RecordPrice explicitly records a price snapshot for a watched symbol.
+func (m *Memory) RecordPrice(symbol string) (model.PricePoint, error) {
+	sym := model.NormalizeSymbol(symbol)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.symbols[sym]; !ok {
+		return model.PricePoint{}, ErrNotFound
+	}
+	price := m.mockPriceLocked(sym)
+	pt := model.PricePoint{Price: price, Timestamp: time.Now()}
+	m.appendHistory(sym, price)
+	return pt, nil
+}
+
+// GetPriceHistory returns recorded price points and stats for a symbol.
+// limit <= 0 returns all points.
+func (m *Memory) GetPriceHistory(symbol string, limit int) (model.PriceHistory, error) {
+	sym := model.NormalizeSymbol(symbol)
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.symbols[sym]; !ok {
+		return model.PriceHistory{}, ErrNotFound
+	}
+
+	pts := m.history[sym]
+	if len(pts) == 0 {
+		return model.PriceHistory{Symbol: sym, Points: []model.PricePoint{}}, nil
+	}
+
+	if limit > 0 && limit < len(pts) {
+		pts = pts[len(pts)-limit:]
+	}
+
+	out := make([]model.PricePoint, len(pts))
+	copy(out, pts)
+
+	high := pts[0].Price
+	low := pts[0].Price
+	var sum float64
+	for _, p := range pts {
+		if p.Price > high {
+			high = p.Price
+		}
+		if p.Price < low {
+			low = p.Price
+		}
+		sum += p.Price
+	}
+	avg := round2(sum / float64(len(pts)))
+	first := pts[0].Price
+	last := pts[len(pts)-1].Price
+	change := round2(last - first)
+	var changePct float64
+	if first != 0 {
+		changePct = round2((change / first) * 100)
+	}
+
+	return model.PriceHistory{
+		Symbol:     sym,
+		Points:     out,
+		High:       high,
+		Low:        low,
+		AvgPrice:   avg,
+		Change:     change,
+		ChangePct:  changePct,
+		PointCount: len(out),
+	}, nil
 }

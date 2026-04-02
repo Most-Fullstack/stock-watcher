@@ -46,6 +46,9 @@ func main() {
 
 	r.GET("/api/market/summary", h.GetMarketSummary)
 
+	r.POST("/api/stocks/:symbol/prices", h.RecordPrice)
+	r.GET("/api/stocks/:symbol/prices", h.GetPriceHistory)
+
 	srv := &http.Server{
 		Addr:              ":" + port,
 		Handler:           r,
